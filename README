@@ -1,1 +1,22 @@
-# Project 5 design notes
+Project 5 design notes
+
+Official project guidelines: https://david.choffnes.com/classes/cs4700sp22/project5.php
+
+Components
+ - DNS redirection
+    + based on geolocation at first (can use GeoIP database - need to sign up for license and install geoip2 client library?: https://dev.maxmind.com/geoip/geolocate-an-ip/web-services?lang=en#official-api-clients)
+    + later add active observation of request performance
+    + also consider server load
+    + also consider which server has data cached
+    + if time, add passive observation?
+    + maintain mapping of clients to replicas
+    + can use dnslib (https://github.com/paulc/dnslib) to build/parse DNS response/request packets
+ - web server
+    + get content from cache if it's there, from origin if not
+    + respond to request for '/grading/beacon' with 204 response code
+    + maintain limited cache (20MB) based on popularity of content
+    + measure latency with client, share that info with DNS server over HTTP
+ - scripts (use SSH key-based authentication)
+    + deployCDN
+    + runCDN
+    + stopCDN
