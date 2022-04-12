@@ -13,7 +13,7 @@ Components
     + can use dnslib (https://github.com/paulc/dnslib) to build/parse DNS response/request packets
  - web server
     X respond to request for '/grading/beacon' with 204 response code
-    + get content from cache if it's there, from origin if not
+    X get content from cache if it's there, from origin if not
     + maintain limited cache (20MB) based on popularity of content
     + measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper), share that info with DNS server over HTTP
  - scripts (use SSH key-based authentication)
