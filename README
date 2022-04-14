@@ -14,7 +14,11 @@ Components
  - web server
     X respond to request for '/grading/beacon' with 204 response code
     X get content from cache if it's there, from origin if not
-    + maintain limited cache (20MB) based on popularity of content
+    X maintain limited cache (20MB) based on popularity of content
+      + use threading to warm the cache asynchronously?
+      + or just store data that we want to cache on disk instead of making all these requests for data that won't change?
+    X call server using `./httpserver -p <port> -o <origin>`
+      + almost - just needs executable version without .py extension but otherwise ready
     + measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper), share that info with DNS server over HTTP
  - scripts (use SSH key-based authentication)
     + deployCDN
