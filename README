@@ -24,3 +24,14 @@ Components
     + deployCDN
     + runCDN
     + stopCDN
+
+
+HTTP server design (Lindsay)
+
+The Python standard library's http.server and http.client modules are used for serving and retrieving content from the origin server. When the server is started, it begins warming its cache using threaded execution so as not to block incoming requests. Since we know the popularity distribution of the content in advance, it makes sense to start prepping the cache as soon as possible.
+
+To do this, the pageviews.csv file is read into a queue with blocking functionality. We start working through this queue using three threads. Each thread takes an item off the queue, requests the content for that resource and adds it to the cache if there is space. Once a thread finds that its requested content is too large to add to the cache (i.e., it would bring the cache size to or over 20MB), that thread clears the rest of the queue, ensuring that all threads cease execution.
+
+While the cache is being populated, the server is already accepting requests at the same time. Thus, we need to ensure that items that are currently being requested by the content fetchers are not requested again by the server thread.
+
+Further, requests may come in for content that should be cached because of its popularity but hasn't yet been reached by the content fetchers working through the queue. In that case, it should be added to the cache by the server, and the fetchers skip over anything in their queue that's already in the cache.
