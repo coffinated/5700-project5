@@ -5,56 +5,74 @@ This file runs the HTTP service on the replica nodes for project 5.
 '''
 
 import argparse
-from asyncio import Task, create_task, gather, run
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPException
 import queue
 from sys import getsizeof
 from csv import reader
+from threading import Thread
 from time import time
 from urllib.parse import quote
+from urllib.request import urlopen
 
 ORIGIN: HTTPConnection
-# TODO: get address dynamically since we'll want to upload same code to all replicas
-ADDRESS = '50.116.41.109'
+# TODO: make sure this is acceptable
+ADDRESS = urlopen('https://api.ipify.org/').read().decode('utf8')
 CACHE = {}
+TOT_CACHED = 0
 
 
+'''
+Helper function for sending a GET request to the origin server for the resource specified
+and using the connection passed in.
+TODO: probably don't keep the exit(1) statements for final submission, just for debugging
+'''
+def fetch_from_origin(resource, conn):
+    try:
+        conn.request('GET', resource)
+    except HTTPException as he:
+        print(f'Hit exception {he} trying to fetch resource {resource} from server, exiting')
+        exit(1)
+    res = conn.getresponse()
+    if res.status == 200:
+        content = res.read()
+    else:
+        print(f'Received status {res.status} trying to fetch resource {resource} from server, exiting')
+        exit(1)
+    status = res.status
+    # TODO: set headers explicitly instead of forwarding the origin's headers??
+    headers = res.getheaders()
+    return (status, content, headers)
+
+
+'''
+This class defines our handling of GET requests at the web server. Aside from the /grading/beacon
+special case, when we receive a request, we look for it in our cache. If it's there, we return the
+cached content; if not, we request the resource from the origin server and return that content.
+'''
 class handler(BaseHTTPRequestHandler):
-    async def await_cache_item(self, key):
-        return await CACHE[key]
-
     def do_GET(self):
+        global CACHE
+
         if self.path == '/grading/beacon':
             self.send_response(204)
             self.end_headers()
         else:
             # if the path is in the cache map, we have at least started or tried to cache it
-            if CACHE.get(self.path):
-                # wait in case it is currently being requested
-                if isinstance(CACHE[self.path], Task):
-                    run(self.await_cache_item(self.path))
-
+            if self.path in CACHE:
                 if CACHE[self.path]:
                     status = 200
                     content = CACHE[self.path]
                     headers = [('Content-Type', 'text/html'), ('Content-Length', str(len(content)))]
-                # if value after await is None, there wasn't enough room left to cache it, must 
-                # request it now and remove from cache map so we don't do this again
+                # if key is in cache but value is None, fetch content and delete the key from 
+                # cache map to prevent this happening again
                 else:
-                    ORIGIN.request('GET', self.path)
-                    res = ORIGIN.getresponse()
-                    status = res.status
-                    content = res.read()
-                    headers = res.getheaders()
+                    (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
                     del CACHE[self.path]
+            # if not, fetch content from origin
             else:
                 # TODO: determine whether content should be cached based on popularity
-                ORIGIN.request('GET', self.path)
-                res = ORIGIN.getresponse()
-                status = res.status
-                content = res.read()
-                headers = res.getheaders()
+                (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
             
             self.send_response(status)
             for each in headers:
@@ -63,60 +81,81 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(content)
 
 
-async def get_content(resource):
-    try:
-        ORIGIN.request('GET', resource)
-    except HTTPException as he:
-        print(f'Hit exception {he} trying to fetch resource {resource} from server, exiting')
-    res = ORIGIN.getresponse()
-    if res.status == 200:
-        content = res.read()
-    else:
-        print(f'Received status {res.status} trying to fetch resource {resource} from server, exiting')
-        exit(1)
+'''
+This function gets content for caching and checks that we have space to cache it. If the cache 
+size has reached our 20MB limit, it returns None.
+'''
+def get_content(resource, originconn):
+    global TOT_CACHED
+    (_, content, _) = fetch_from_origin(resource, originconn)
 
-    if getsizeof(CACHE) + len(content) <= 20000000:
+    if TOT_CACHED + len(resource) + len(content) <= 20000000:
+        TOT_CACHED += len(resource) + len(content)
         return content
     else:
         return None
 
 
-async def content_fetcher(cq: queue.Queue):
+'''
+Each fetcher thread opens a connection to the origin server and starts requesting items from the
+queue. If the get_content() function returned None, it means the cache limit has been reached, so
+the thread clears the rest of the working queue. The fetching threads all cease looping when the 
+queue is empty.
+'''
+def content_fetcher(cq: queue.Queue, origin):
     global CACHE
+    # each fetcher thread gets its own server connection
+    try:
+        originconn = HTTPConnection(origin, 8080)
+    except HTTPException as he:
+        print(f'Could not connect to origin, exception: {he}\nExiting')
+        exit(1)
 
     while not cq.empty():
         try:
+            # pop the next resource off the queue
             resource = cq.get(False)
-        # this shouldn't happen since we check for empty but just in case some threading
-        # shenanigans happen, check for it here too
         except queue.Empty:
+            # this shouldn't happen since we check for empty but just in case some threading
+            # shenanigans happen, check for it here too
             break
 
         # if it was already cached, move onto next
         if CACHE.get(resource):
             continue
-        # create async task so that server request handler can see we're currently fetching this
-        # resource if it happens to get a request for it at the same time
-        CACHE[resource] = create_task(get_content(resource))
-        await CACHE[resource]
+
+        CACHE[resource] = get_content(resource, originconn)
 
         # getter returns None if cache limit reached, check for that and clear the queue if so
         if not CACHE[resource]:
+            del CACHE[resource]
             cq.queue.clear()
 
 
-async def wait_for_cache_filled(workers, start):
-    for each in workers:
-        await each
+'''
+This waits on the fetcher threads in order to report back on how long the cache process took and
+how many items we cached.
+TODO: Delete for final submission as we won't need to print these out
+'''
+def wait_for_cache_filled(workers, start):
+    for thread in workers:
+        thread.join()
 
-    print(f'Cache has been filled with {len(CACHE.keys)} items in {time()-start} seconds!')
+    print(f'Cache has been filled with {len(CACHE.keys())} items in {time()-start} seconds!')
 
-async def warm_cache():
+
+'''
+This function reads the pageveiws.csv information into a Queue, which is a thread safe data 
+structure for several content fetching threads to work from as they populate our cache. We start
+5 threads to fetch content, and another thread to wait on those threads in the background and 
+report back on how long it took (TODO: can delete the latter before final submission).
+'''
+def warm_cache():
     print('Populating cache!')
 
     cache_q = queue.Queue()
     fetchers = []
-    start = time()
+    # start = time()
 
     with open('pageviews.csv', newline='') as pop_dist:
         pop_reader = reader(pop_dist)
@@ -124,35 +163,47 @@ async def warm_cache():
             cache_q.put_nowait(quote('/' + row[0]))
 
     for i in range(3):
-        fetchers.append(create_task(content_fetcher(cache_q)))
+        fetchers.append(Thread(target=content_fetcher, args=(cache_q, ORIGIN.host)))
+        fetchers[i].start()
 
-    create_task(wait_for_cache_filled(fetchers, start))
+    # Thread(target=wait_for_cache_filled, args=(fetchers, start)).start()
 
 
+'''
+Our main function takes two arguments, port and origin, and uses them to determine which local
+port to serve from and where the origin server is that it should connect to for content. At
+startup, we call our cache warming function and immediately start the server up. The server 
+should start accepting requests while several worker threads begin fetching cache content in
+the background. The server runs indefinitely until a KeyboardInterrupt is received, then it closes
+and shuts down its connection to the origin server.
+'''
 def main():
     global ORIGIN
+
+    # accept and parse command line arguments
     parser = argparse.ArgumentParser(description='Start HTTP replica server using specified local'
                                                  ' port and origin server')
     parser.add_argument('-p', '--port', type=int, required=True)
     parser.add_argument('-o', '--origin', required=True)
     args = parser.parse_args()
+
     try:
+        # this connection to the origin server is for serving incoming requests
         ORIGIN = HTTPConnection(args.origin, 8080)
     except HTTPException as he:
         print(f'Could not connect to origin, exception: {he}\nExiting')
         exit(1)
 
-    run(warm_cache())
-    print('Warming cache, meanwhile starting server...')
-
     server = ThreadingHTTPServer((ADDRESS, args.port), handler)
+    # start server and cache warming threads in try-except clause to allow for ctrl-C exit
     try:
+        cache_thread = Thread(target=warm_cache, daemon=True)
+        cache_thread.start()
         server.serve_forever()
-        print('Ready to serve!')
     except KeyboardInterrupt:
         server.server_close()
         ORIGIN.close()
-        print('Stopped server')
+        print('\nStopped server')
 
 
 main()

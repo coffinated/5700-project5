@@ -15,8 +15,8 @@ Components
     X respond to request for '/grading/beacon' with 204 response code
     X get content from cache if it's there, from origin if not
     X maintain limited cache (20MB) based on popularity of content
-      + use threading to warm the cache asynchronously?
-      + or just store data that we want to cache on disk instead of making all these requests for data that won't change?
+      X use threading to warm the cache asynchronously
+      + store some of cache on disk?
     X call server using `./httpserver -p <port> -o <origin>`
       + almost - just needs executable version without .py extension but otherwise ready
     + measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper), share that info with DNS server over HTTP
@@ -30,8 +30,8 @@ HTTP server design (Lindsay)
 
 The Python standard library's http.server and http.client modules are used for serving and retrieving content from the origin server. When the server is started, it begins warming its cache using threaded execution so as not to block incoming requests. Since we know the popularity distribution of the content in advance, it makes sense to start prepping the cache as soon as possible.
 
-To do this, the pageviews.csv file is read into a queue with blocking functionality. We start working through this queue using three threads. Each thread takes an item off the queue, requests the content for that resource and adds it to the cache if there is space. Once a thread finds that its requested content is too large to add to the cache (i.e., it would bring the cache size to or over 20MB), that thread clears the rest of the queue, ensuring that all threads cease execution.
+To do this, the pageviews.csv file is read into a queue with blocking functionality. We start working through this queue using 3 threads. Each thread takes an item off the queue, requests the content for that resource from the origin, and adds it to the cache if there is space. Once a thread finds that its requested content is too large to add to the cache (i.e., it would bring the cache size to or over 20MB), that thread clears the rest of the queue, ensuring that all threads cease execution.
 
-While the cache is being populated, the server is already accepting requests at the same time. Thus, we need to ensure that items that are currently being requested by the content fetchers are not requested again by the server thread.
+While the cache is being populated, the web server also starts up and accepts requests. Aside from the special /grading/beacon case, the server always checks for the request resource in its cache first. If the content is there, the server returns the cached content; if not, it requests the resource from the origin server and returns that.
 
-Further, requests may come in for content that should be cached because of its popularity but hasn't yet been reached by the content fetchers working through the queue. In that case, it should be added to the cache by the server, and the fetchers skip over anything in their queue that's already in the cache.
+Still to do: perform active measurement of client connection using scamper python tool, add endpoint for DNS server to get data about this measurement.
