@@ -1,0 +1,20 @@
+#! /usr/bin/env bash
+
+while getopts ":ponui:" flag; do
+    case $flag in
+        p)
+            port=$OPTARG;;
+        o)
+            origin=$OPTARG;;
+        n)
+            name=$OPTARG;;
+        u)
+            username=$OPTARG;;
+        i)
+            keyfile=$OPTARG;;
+        /?)
+            echo "Error: Invalid option"
+            exit;;
+    esac
+done
+
