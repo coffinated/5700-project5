@@ -150,8 +150,6 @@ structure for several content fetching threads to work from as they populate our
 report back on how long it took (TODO: can delete the latter before final submission).
 '''
 def warm_cache():
-    print('Populating cache!')
-
     cache_q = queue.Queue()
     fetchers = []
     # start = time()
