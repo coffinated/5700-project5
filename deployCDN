@@ -18,3 +18,15 @@ while getopts ":ponui:" flag; do
     esac
 done
 
+# make executable file for DNS server
+cp ./dnsserver.py ./dnsserver
+chmod +x ./dnsserver
+# send to DNS server node
+scp -i $keyfile ./dnsserver $username@p5-dns.5700.network:~/
+
+# make executable file for HTTP server
+cp ./httpserver.py ./httpserver
+chmod +x ./httpserver
+# send to replica node along with pageviews data for cache
+rsync -e "ssh -i $keyfile" ./httpserver $username@p5-http-a.5700.network:~/
+rsync -e "ssh -i $keyfile" ./pageviews.csv $username@p5-http-a.5700.network:~/

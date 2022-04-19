@@ -8,7 +8,6 @@ import argparse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPException
 import queue
-from sys import getsizeof
 from csv import reader
 from threading import Thread
 from time import time

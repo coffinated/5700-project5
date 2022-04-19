@@ -18,3 +18,5 @@ while getopts ":ponui:" flag; do
     esac
 done
 
+ssh -i $keyfile $username@p5-dns.5700.network "nohup ./dnsserver -p $port -n $name &" 
+ssh -i $keyfile $username@p5-http-a.5700.network "nohup ./httpserver -p $port -o $origin &"
