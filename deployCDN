@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-while getopts ":ponui:" flag; do
+while getopts "p:o:n:u:i:" flag; do
     case $flag in
         p)
             port=$OPTARG;;
@@ -22,7 +22,7 @@ done
 cp ./dnsserver.py ./dnsserver
 chmod +x ./dnsserver
 # send to DNS server node
-scp -i $keyfile ./dnsserver $username@p5-dns.5700.network:~/
+rsync -e "ssh -i $keyfile" ./dnsserver $username@p5-dns.5700.network:~/
 
 # make executable file for HTTP server
 cp ./httpserver.py ./httpserver

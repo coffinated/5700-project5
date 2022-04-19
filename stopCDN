@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-while getopts ":ponui:" flag; do
+while getopts "p:o:n:u:i:" flag; do
     case $flag in
         p)
             port=$OPTARG;;
@@ -18,3 +18,5 @@ while getopts ":ponui:" flag; do
     esac
 done
 
+ssh -i $keyfile $username@p5-dns.5700.network "pkill -u $username python"
+ssh -i $keyfile $username@p5-http-a.5700.network "pkill -u $username python"

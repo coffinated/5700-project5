@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-while getopts ":ponui:" flag; do
+while getopts "p:o:n:u:i:" flag; do
     case $flag in
         p)
             port=$OPTARG;;
@@ -18,5 +18,5 @@ while getopts ":ponui:" flag; do
     esac
 done
 
-ssh -i $keyfile $username@p5-dns.5700.network "nohup ./dnsserver -p $port -n $name &" 
-ssh -i $keyfile $username@p5-http-a.5700.network "nohup ./httpserver -p $port -o $origin &"
+ssh -i $keyfile $username@p5-dns.5700.network "nohup ./dnsserver -p $port -n $name > dnsserver_log.out 2>&1 &" 
+ssh -i $keyfile $username@p5-http-a.5700.network "nohup ./httpserver -p $port -o $origin > httpserver_log.out 2>&1 &"
