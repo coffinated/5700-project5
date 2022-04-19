@@ -20,6 +20,6 @@ Components
     - [x] call server using `./httpserver -p <port> -o <origin>`
     - [ ] measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper), share that info with DNS server over HTTP
  - scripts (use SSH key-based authentication)
-    - [ ] deployCDN
-    - [ ] runCDN
-    - [ ] stopCDN
+    - [x] deployCDN
+    - [x] runCDN
+    - [x] stopCDN
