@@ -9,16 +9,28 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPException
 import queue
 from csv import reader
+from signal import signal, SIGTERM
 from threading import Thread
 from time import time
 from urllib.parse import quote
 from urllib.request import urlopen
 
+SERVER: ThreadingHTTPServer
 ORIGIN: HTTPConnection
 # TODO: make sure this is acceptable
 ADDRESS = urlopen('https://api.ipify.org/').read().decode('utf8')
 CACHE = {}
 TOT_CACHED = 0
+
+
+'''
+Helper function for handling interrupts and closing gracefully
+'''
+def close_server(signum, frame):
+    SERVER.server_close()
+    ORIGIN.close()
+    print(f'Stopped server at {time()}')
+    exit(0)
 
 
 '''
@@ -130,6 +142,8 @@ def content_fetcher(cq: queue.Queue, origin):
             del CACHE[resource]
             cq.queue.clear()
 
+    originconn.close()
+
 
 '''
 This waits on the fetcher threads in order to report back on how long the cache process took and
@@ -175,6 +189,7 @@ the background. The server runs indefinitely until a KeyboardInterrupt is receiv
 and shuts down its connection to the origin server.
 '''
 def main():
+    global SERVER
     global ORIGIN
 
     # accept and parse command line arguments
@@ -191,16 +206,15 @@ def main():
         print(f'Could not connect to origin, exception: {he}\nExiting')
         exit(1)
 
-    server = ThreadingHTTPServer((ADDRESS, args.port), handler)
+    SERVER = ThreadingHTTPServer((ADDRESS, args.port), handler)
     # start server and cache warming threads in try-except clause to allow for ctrl-C exit
     try:
         cache_thread = Thread(target=warm_cache, daemon=True)
         cache_thread.start()
-        server.serve_forever()
+        SERVER.serve_forever()
     except KeyboardInterrupt:
-        server.server_close()
-        ORIGIN.close()
-        print('\nStopped server')
+        close_server()
 
 
+signal(SIGTERM, close_server)
 main()
