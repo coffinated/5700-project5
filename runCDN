@@ -18,5 +18,7 @@ while getopts "p:o:n:u:i:" flag; do
     esac
 done
 
+echo "Starting DNS server"
 ssh -i $keyfile $username@p5-dns.5700.network "nohup ./dnsserver -p $port -n $name > dnsserver_log.out 2>&1 &" 
+echo "Starting HTTP server replica a"
 ssh -i $keyfile $username@p5-http-a.5700.network "nohup ./httpserver -p $port -o $origin > httpserver_log.out 2>&1 &"

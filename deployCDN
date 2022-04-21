@@ -19,14 +19,19 @@ while getopts "p:o:n:u:i:" flag; do
 done
 
 # make executable file for DNS server
+echo "Making DNS server executable"
 cp ./dnsserver.py ./dnsserver
 chmod +x ./dnsserver
 # send to DNS server node
+echo "Sending DNS executable to DNS node"
 rsync -e "ssh -i $keyfile" ./dnsserver $username@p5-dns.5700.network:~/
 
 # make executable file for HTTP server
+echo "Making HTTP server executable"
 cp ./httpserver.py ./httpserver
 chmod +x ./httpserver
 # send to replica node along with pageviews data for cache
+echo "Sending HTTP executable to replica a node"
 rsync -e "ssh -i $keyfile" ./httpserver $username@p5-http-a.5700.network:~/
-rsync -e "ssh -i $keyfile" ./pageviews.csv $username@p5-http-a.5700.network:~/
+echo "Sending pages_to_cache.csv to replica a node"
+rsync -e "ssh -i $keyfile" ./pages_to_cache.csv $username@p5-http-a.5700.network:~/

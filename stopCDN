@@ -18,5 +18,7 @@ while getopts "p:o:n:u:i:" flag; do
     esac
 done
 
+echo "Stopping DNS server"
 ssh -i $keyfile $username@p5-dns.5700.network "pkill -u $username python"
+echo "Stopping HTTP server replica a"
 ssh -i $keyfile $username@p5-http-a.5700.network "pkill -u $username python"
