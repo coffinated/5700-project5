@@ -9,3 +9,10 @@ To do this, the pageviews.csv file is read into a queue with blocking functional
 While the cache is being populated, the web server also starts up and accepts requests. Aside from the special /grading/beacon case, the server always checks for the request resource in its cache first. If the content is there, the server returns the cached content; if not, it requests the resource from the origin server and returns that.
 
 Still to do: perform active measurement of client connection using scamper python tool, add endpoint for DNS server to get data about this measurement.
+
+DNS server design(Tianyi )
+
+dnslib is used to construct dns packet from the request. The dns server will be running at the cs5700cdnproject.ccs.neu.edu and on the specific port. The dns server can handle request by first
+parsing it than construct reply based on the header file of the request. Then it will direct the request the the default replica server  50.116.41.109. \
+
+Still to do: cache the client ip and response for future queries, implement the feature to find the cloestest replica using geolocation.
