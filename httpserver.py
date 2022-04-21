@@ -6,12 +6,12 @@ This file runs the HTTP service on the replica nodes for project 5.
 
 import argparse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from http.client import HTTPConnection, HTTPException
+from http.client import HTTPConnection, HTTPException, RemoteDisconnected
 import queue
 from csv import reader
 from signal import signal, SIGTERM
 from threading import Thread
-from time import time
+from time import strftime, time
 from urllib.parse import quote
 from urllib.request import urlopen
 
@@ -29,7 +29,7 @@ Helper function for handling interrupts and closing gracefully
 def close_server(signum, frame):
     SERVER.server_close()
     ORIGIN.close()
-    print(f'Stopped server at {time()}')
+    print(f"Stopped server at {strftime('%c')}")
     exit(0)
 
 
@@ -38,8 +38,12 @@ Helper function for sending a GET request to the origin server for the resource 
 and using the connection passed in.
 TODO: probably don't keep the exit(1) statements for final submission, just for debugging
 '''
-def fetch_from_origin(resource, conn):
+def fetch_from_origin(resource, conn: HTTPConnection):
     try:
+        conn.request('GET', resource)
+    except RemoteDisconnected as dis_err:
+        print(f'{dis_err} - trying to reconnect')
+        conn.connect()
         conn.request('GET', resource)
     except HTTPException as he:
         print(f'Hit exception {he} trying to fetch resource {resource} from server, exiting')
@@ -75,36 +79,24 @@ class handler(BaseHTTPRequestHandler):
                     status = 200
                     content = CACHE[self.path]
                     headers = [('Content-Type', 'text/html'), ('Content-Length', str(len(content)))]
+                    print(f'Got {self.path} from cache')
                 # if key is in cache but value is None, fetch content and delete the key from 
                 # cache map to prevent this happening again
                 else:
                     (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
                     del CACHE[self.path]
+                    print(f'Thought it was cached, wasn\'t, got from origin: {self.path}')
             # if not, fetch content from origin
             else:
                 # TODO: determine whether content should be cached based on popularity
                 (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
+                print(f'Got from origin: {self.path}')
             
             self.send_response(status)
             for each in headers:
                 self.send_header(each[0], each[1])
             self.end_headers()
             self.wfile.write(content)
-
-
-'''
-This function gets content for caching and checks that we have space to cache it. If the cache 
-size has reached our 20MB limit, it returns None.
-'''
-def get_content(resource, originconn):
-    global TOT_CACHED
-    (_, content, _) = fetch_from_origin(resource, originconn)
-
-    if TOT_CACHED + len(resource) + len(content) <= 20000000:
-        TOT_CACHED += len(resource) + len(content)
-        return content
-    else:
-        return None
 
 
 '''
@@ -135,12 +127,8 @@ def content_fetcher(cq: queue.Queue, origin):
         if CACHE.get(resource):
             continue
 
-        CACHE[resource] = get_content(resource, originconn)
-
-        # getter returns None if cache limit reached, check for that and clear the queue if so
-        if not CACHE[resource]:
-            del CACHE[resource]
-            cq.queue.clear()
+        (_, content, _) = fetch_from_origin(resource, originconn)
+        CACHE[resource] = content
 
     originconn.close()
 
@@ -166,9 +154,9 @@ report back on how long it took (TODO: can delete the latter before final submis
 def warm_cache():
     cache_q = queue.Queue()
     fetchers = []
-    # start = time()
+    start = time()
 
-    with open('pageviews.csv', newline='') as pop_dist:
+    with open('pages_to_cache.csv', newline='') as pop_dist:
         pop_reader = reader(pop_dist)
         for row in pop_reader:
             cache_q.put_nowait(quote('/' + row[0]))
@@ -177,7 +165,7 @@ def warm_cache():
         fetchers.append(Thread(target=content_fetcher, args=(cache_q, ORIGIN.host)))
         fetchers[i].start()
 
-    # Thread(target=wait_for_cache_filled, args=(fetchers, start)).start()
+    Thread(target=wait_for_cache_filled, args=(fetchers, start)).start()
 
 
 '''
