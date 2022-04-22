@@ -4,7 +4,8 @@
 
 Components
  - DNS redirection
-    - [ ] based on geolocation at first (can use GeoIP database - need to sign up for license and install geoip2 client library?: https://dev.maxmind.com/geoip/geolocate-an-ip/web-services?lang=en#official-api-clients)
+    - [ ] based on geolocation at first
+      - [ ] can use GeoIP database - need to download database to DNS node? https://dev.maxmind.com/geoip/geolocate-an-ip/databases (try to find lightest-weight db they offer since we don't need super fine-grained location data)
     - [ ] later add active observation of request performance
     - [ ] if time, add passive observation?
     - [ ] maintain mapping of clients to replicas
@@ -14,12 +15,14 @@ Components
     - [x] get content from cache if it's there, from origin if not
     - [x] maintain limited cache (20MB) based on popularity of content
       - [x] use threading to warm the cache asynchronously
-      - [ ] store some of cache on disk, ship with deploy script
+      - [ ] can also store cache on disk (another 20MB), ship with deploy script
     - [x] call server using `./httpserver -p <port> -o <origin>`
-    - [ ] measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper), share that info with DNS server over HTTP
+    - [ ] measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper)
+      - [ ] share that info with DNS server over HTTP
  - scripts (use SSH key-based authentication)
     - [x] deployCDN
       - [ ] edit to include all replicas
+      - [ ] deploy cache files as well (and geoIP db?)
     - [x] runCDN
       - [ ] edit to include all replicas
     - [x] stopCDN
