@@ -5,11 +5,13 @@ This file runs the HTTP service on the replica nodes for project 5.
 '''
 
 import argparse
+import gzip
+import shutil
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPException, RemoteDisconnected
 import queue
 from csv import reader
-from signal import signal, SIGTERM
+from signal import signal, SIGTERM, SIGINT
 from threading import Thread
 from time import strftime, time
 from urllib.parse import quote
@@ -31,6 +33,13 @@ def close_server(signum, frame):
     ORIGIN.close()
     print(f"Stopped server at {strftime('%c')}")
     exit(0)
+
+
+'''
+TODO: Still tweaking this process
+'''
+def warm_disk_cache():
+    shutil.unpack_archive('zip', './disk_cache/')
 
 
 '''
@@ -66,31 +75,52 @@ special case, when we receive a request, we look for it in our cache. If it's th
 cached content; if not, we request the resource from the origin server and return that content.
 '''
 class handler(BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
     def do_GET(self):
         global CACHE
 
         if self.path == '/grading/beacon':
             self.send_response(204)
             self.end_headers()
+
+        # TODO: this is for testing, DELETE
+        elif self.path.startswith('/origin'):
+            (status, content, headers) = fetch_from_origin(self.path[7:], ORIGIN)
+            self.send_response(status)
+            for each in headers:
+                self.send_header(each[0], each[1])
+            self.end_headers()
+            self.wfile.write(content)
+
+        # TODO: this is for testing, DELETE
+        elif self.path.startswith('/compressed'):
+            with open(f"{self.path.split('/')[2]}.txt.gz", 'rb') as f:
+                # first line in file provides length of content
+                length = f.readline()
+                self.send_response(200)
+                headers = [('Content-Type', 'text/html'), ('Content-Length', length.decode())]
+                for each in headers:
+                    self.send_header(each[0], each[1])
+                self.end_headers()
+
+                shutil.copyfileobj(f, self.wfile)
+
         else:
             # if the path is in the cache map, we have at least started or tried to cache it
             if self.path in CACHE:
                 if CACHE[self.path]:
                     status = 200
-                    content = CACHE[self.path]
+                    content = gzip.decompress(CACHE[self.path])
                     headers = [('Content-Type', 'text/html'), ('Content-Length', str(len(content)))]
-                    print(f'Got {self.path} from cache')
                 # if key is in cache but value is None, fetch content and delete the key from 
                 # cache map to prevent this happening again
                 else:
                     (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
                     del CACHE[self.path]
-                    print(f'Thought it was cached, wasn\'t, got from origin: {self.path}')
             # if not, fetch content from origin
             else:
-                # TODO: determine whether content should be cached based on popularity
                 (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
-                print(f'Got from origin: {self.path}')
             
             self.send_response(status)
             for each in headers:
@@ -107,6 +137,7 @@ queue is empty.
 '''
 def content_fetcher(cq: queue.Queue, origin):
     global CACHE
+    global TOT_CACHED
     # each fetcher thread gets its own server connection
     try:
         originconn = HTTPConnection(origin, 8080)
@@ -128,7 +159,14 @@ def content_fetcher(cq: queue.Queue, origin):
             continue
 
         (_, content, _) = fetch_from_origin(resource, originconn)
-        CACHE[resource] = content
+        content = gzip.compress(content)
+        # cache up to 20 MB in memory (minus 100 KB wiggle room for stack)
+        if TOT_CACHED + len(content) + len(resource) <= 19900000:
+            CACHE[resource] = content
+            TOT_CACHED += len(content) + len(resource)
+        else:
+            cq.queue.clear()
+
 
     originconn.close()
 
@@ -139,10 +177,11 @@ how many items we cached.
 TODO: Delete for final submission as we won't need to print these out
 '''
 def wait_for_cache_filled(workers, start):
+    global TOT_CACHED
     for thread in workers:
         thread.join()
 
-    print(f'Cache has been filled with {len(CACHE.keys())} items in {time()-start} seconds!')
+    print(f'Cache has been filled with {len(CACHE.keys())} items ({TOT_CACHED} bytes) in {time()-start} seconds!', flush=True)
 
 
 '''
@@ -165,7 +204,7 @@ def warm_cache():
         fetchers.append(Thread(target=content_fetcher, args=(cache_q, ORIGIN.host)))
         fetchers[i].start()
 
-    Thread(target=wait_for_cache_filled, args=(fetchers, start)).start()
+    wait_for_cache_filled(fetchers, start)
 
 
 '''
@@ -195,13 +234,15 @@ def main():
         exit(1)
 
     SERVER = ThreadingHTTPServer((ADDRESS, args.port), handler)
+    SERVER.protocol_version = 'HTTP/1.1'
     # start server and cache warming threads in try-except clause to allow for ctrl-C exit
     try:
         cache_thread = Thread(target=warm_cache, daemon=True)
         cache_thread.start()
+        warm_disk_cache()
         SERVER.serve_forever()
     except KeyboardInterrupt:
-        close_server()
+        close_server(SIGINT, None)
 
 
 signal(SIGTERM, close_server)
