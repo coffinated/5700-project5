@@ -15,6 +15,7 @@ Components
     - [x] get content from cache if it's there, from origin if not
     - [x] maintain limited cache (20MB) based on popularity of content
       - [x] use threading to warm the cache asynchronously
+      - [x] use compression to cache more pages
       - [ ] can also store cache on disk (another 20MB), ship with deploy script
     - [x] call server using `./httpserver -p <port> -o <origin>`
     - [ ] measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper)
