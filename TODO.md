@@ -16,15 +16,18 @@ Components
     - [x] maintain limited cache (20MB) based on popularity of content
       - [x] use threading to warm the cache asynchronously
       - [x] use compression to cache more pages
-      - [ ] can also store cache on disk (another 20MB), ship with deploy script
+      - [x] can also store cache on disk (another 20MB), ship with deploy script
     - [x] call server using `./httpserver -p <port> -o <origin>`
+    - [ ] add health check endpoint for startup
     - [ ] measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper)
       - [ ] share that info with DNS server over HTTP
  - scripts (use SSH key-based authentication)
     - [x] deployCDN
       - [ ] edit to include all replicas
-      - [ ] deploy cache files as well (and geoIP db?)
+      - [x] deploy cache files as well
+      - [ ] and geoIP db?
     - [x] runCDN
       - [ ] edit to include all replicas
+      - [ ] add health check for web servers
     - [x] stopCDN
       - [ ] edit to include all replicas
