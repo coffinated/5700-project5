@@ -7,6 +7,7 @@ This file runs the HTTP service on the replica nodes for project 5.
 import argparse
 import gzip
 import shutil
+from os import remove
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPException, RemoteDisconnected
 import queue
@@ -21,7 +22,8 @@ SERVER: ThreadingHTTPServer
 ORIGIN: HTTPConnection
 # TODO: make sure this is acceptable
 ADDRESS = urlopen('https://api.ipify.org/').read().decode('utf8')
-CACHE = {}
+MEM_CACHE = {}
+DISK_CACHE = {}
 TOT_CACHED = 0
 
 
@@ -33,13 +35,6 @@ def close_server(signum, frame):
     ORIGIN.close()
     print(f"Stopped server at {strftime('%c')}")
     exit(0)
-
-
-'''
-TODO: Still tweaking this process
-'''
-def warm_disk_cache():
-    shutil.unpack_archive('zip', './disk_cache/')
 
 
 '''
@@ -78,55 +73,52 @@ class handler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
 
     def do_GET(self):
-        global CACHE
+        global MEM_CACHE
+        global DISK_CACHE
 
         if self.path == '/grading/beacon':
             self.send_response(204)
             self.end_headers()
 
-        # TODO: this is for testing, DELETE
-        elif self.path.startswith('/origin'):
-            (status, content, headers) = fetch_from_origin(self.path[7:], ORIGIN)
-            self.send_response(status)
-            for each in headers:
-                self.send_header(each[0], each[1])
-            self.end_headers()
-            self.wfile.write(content)
+        else:
+            # if the path is in the mem_cache map, we have at least started or tried to cache it
+            if self.path in MEM_CACHE:
+                if MEM_CACHE[self.path]:
+                    status = 200
+                    content = gzip.decompress(MEM_CACHE[self.path])
+                    headers = [('Content-Type', 'text/html'), ('Content-Length', str(len(content)))]
+                # if key is in cache but value is None, caching is in progress, just fetch again
+                # here as this shouldn't happen too often
+                else:
+                    (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
 
-        # TODO: this is for testing, DELETE
-        elif self.path.startswith('/compressed'):
-            with open(f"{self.path.split('/')[2]}.txt.gz", 'rb') as f:
-                # first line in file provides length of content
-                length = f.readline()
-                self.send_response(200)
-                headers = [('Content-Type', 'text/html'), ('Content-Length', length.decode())]
+                self.send_response(status)
                 for each in headers:
                     self.send_header(each[0], each[1])
                 self.end_headers()
+                self.wfile.write(content)
 
-                shutil.copyfileobj(f, self.wfile)
+            # otherwise, if it's in the disk_cache map, read from file on disk
+            elif self.path in DISK_CACHE:
+                with gzip.open(f"./disk_cache/{self.path.split('/')[1]}.txt.gz", 'rb') as f:
+                    # first line in file provides length of content
+                    length = f.readline()
+                    self.send_response(200)
+                    headers = [('Content-Type', 'text/html'), ('Content-Length', length.decode().strip())]
+                    for each in headers:
+                        self.send_header(each[0], each[1])
+                    self.end_headers()
 
-        else:
-            # if the path is in the cache map, we have at least started or tried to cache it
-            if self.path in CACHE:
-                if CACHE[self.path]:
-                    status = 200
-                    content = gzip.decompress(CACHE[self.path])
-                    headers = [('Content-Type', 'text/html'), ('Content-Length', str(len(content)))]
-                # if key is in cache but value is None, fetch content and delete the key from 
-                # cache map to prevent this happening again
-                else:
-                    (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
-                    del CACHE[self.path]
-            # if not, fetch content from origin
+                    shutil.copyfileobj(f, self.wfile)
+
+            # if not cached, fetch content from origin
             else:
                 (status, content, headers) = fetch_from_origin(self.path, ORIGIN)
-            
-            self.send_response(status)
-            for each in headers:
-                self.send_header(each[0], each[1])
-            self.end_headers()
-            self.wfile.write(content)
+                self.send_response(status)
+                for each in headers:
+                    self.send_header(each[0], each[1])
+                self.end_headers()
+                self.wfile.write(content)
 
 
 '''
@@ -136,7 +128,7 @@ the thread clears the rest of the working queue. The fetching threads all cease 
 queue is empty.
 '''
 def content_fetcher(cq: queue.Queue, origin):
-    global CACHE
+    global MEM_CACHE
     global TOT_CACHED
     # each fetcher thread gets its own server connection
     try:
@@ -155,14 +147,14 @@ def content_fetcher(cq: queue.Queue, origin):
             break
 
         # if it was already cached, move onto next
-        if CACHE.get(resource):
+        if MEM_CACHE.get(resource):
             continue
 
         (_, content, _) = fetch_from_origin(resource, originconn)
         content = gzip.compress(content)
         # cache up to 20 MB in memory (minus 100 KB wiggle room for stack)
         if TOT_CACHED + len(content) + len(resource) <= 19900000:
-            CACHE[resource] = content
+            MEM_CACHE[resource] = content
             TOT_CACHED += len(content) + len(resource)
         else:
             cq.queue.clear()
@@ -181,23 +173,38 @@ def wait_for_cache_filled(workers, start):
     for thread in workers:
         thread.join()
 
-    print(f'Cache has been filled with {len(CACHE.keys())} items ({TOT_CACHED} bytes) in {time()-start} seconds!', flush=True)
+    print(f'Cache has been filled with {len(MEM_CACHE.keys())} items ({TOT_CACHED} bytes) in {time()-start} seconds!', flush=True)
 
 
 '''
-This function reads the pageveiws.csv information into a Queue, which is a thread safe data 
-structure for several content fetching threads to work from as they populate our cache. We start
-5 threads to fetch content, and another thread to wait on those threads in the background and 
+This function prepares caches on disk and in memory. First, it unzips the disk_cache.zip file 
+which gets deployed along with the code to the web server replicas, populating the current 
+directory with the on-disk cache contents. It then reads the disk_cache.csv file so that it has a 
+map of the contents cached to disk. Next, it reads the memory_cache.csv information into a Queue, 
+which is a thread safe data structure for several content fetching threads to work from as they 
+populate our cache. We start 3 threads to fetch content, and wait on those threads and 
 report back on how long it took (TODO: can delete the latter before final submission).
 '''
 def warm_cache():
+    global DISK_CACHE
+    print('Unzipping disk cache', flush=True)
+    shutil.unpack_archive('./disk_cache.zip')
+    remove('./disk_cache.zip')
+    print('Reading disk cache list', flush=True)
+    with open('disk_cache.csv', newline='') as disk_pages:
+        tier2_reader = reader(disk_pages)
+        for row in tier2_reader:
+            # we just need to be able to see that the key is in the dict, all values = True
+            DISK_CACHE[quote('/' + row[0])] = True
+
     cache_q = queue.Queue()
     fetchers = []
     start = time()
 
-    with open('pages_to_cache.csv', newline='') as pop_dist:
-        pop_reader = reader(pop_dist)
-        for row in pop_reader:
+    print('Reading memory cache list', flush=True)
+    with open('memory_cache.csv', newline='') as mem_pages:
+        tier1_reader = reader(mem_pages)
+        for row in tier1_reader:
             cache_q.put_nowait(quote('/' + row[0]))
 
     for i in range(3):
@@ -239,7 +246,6 @@ def main():
     try:
         cache_thread = Thread(target=warm_cache, daemon=True)
         cache_thread.start()
-        warm_disk_cache()
         SERVER.serve_forever()
     except KeyboardInterrupt:
         close_server(SIGINT, None)

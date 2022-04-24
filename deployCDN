@@ -33,8 +33,8 @@ chmod +x ./httpserver
 # send to replica node along with data for cache
 echo "Sending HTTP executable to replica a node"
 rsync -e "ssh -i $keyfile" ./httpserver $username@p5-http-a.5700.network:~/
-echo "Sending memory_cache.csv to replica a node"
+echo "Sending cache lists to replica a node"
 rsync -e "ssh -i $keyfile" ./memory_cache.csv $username@p5-http-a.5700.network:~/
-# below is still in progress, commented out for now
-# echo "Sending disk_cache.zip to replica a node"
-# rsync -e "ssh -i $keyfile" ./disk_cache.zip $username@p5-http-a.5700.network:~/
+rsync -e "ssh -i $keyfile" ./disk_cache.csv $username@p5-http-a.5700.network:~/
+echo "Sending disk_cache.zip to replica a node, this will take several seconds"
+rsync -e "ssh -i $keyfile" ./disk_cache.zip $username@p5-http-a.5700.network:~/
