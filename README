@@ -2,13 +2,13 @@ Project 5 design notes
 
 HTTP server design (Lindsay)
 
-The Python standard library's http.server and http.client modules are used for serving and retrieving content from the origin server. When the server is started, it begins warming its cache using threaded execution so as not to block incoming requests. Since we know the popularity distribution of the content in advance, it makes sense to start prepping the cache as soon as possible.
+The Python standard library's http.server and http.client modules are used for serving and retrieving content from the origin server. When the server is started, it begins warming its cache using threaded execution so as not to block incoming requests. Since we know the popularity distribution of the content in advance and contents won't change, it makes sense to start prepping the cache as soon as possible.
 
-To do this, the pageviews.csv file is read into a queue with blocking functionality. We start working through this queue using 3 threads. Each thread takes an item off the queue, requests the content for that resource from the origin, and adds it to the cache if there is space. Once a thread finds that its requested content is too large to add to the cache (i.e., it would bring the cache size to or over 20MB), that thread clears the rest of the queue, ensuring that all threads cease execution.
+We have a two-tiered cache: the most popular contents are stored in memory for fastest access, then the next most popular are stored on disk. We ship the latter in our deploy script so the server only needs to unzip it on startup, and to learn which pages it has on disk, it reads disk_cache.csv. (This file is a list of all the resources the disk_cache.zip file contains. We determined this list and the in-memory one using trial and error to find the most page contents we could store compressed while staying within our 20 MB disk and memory limits.) Next, memory_cache.csv is read into a queue with blocking functionality. We start working through this queue using 3 threads. Each thread takes an item off the queue, requests the content for that resource from the origin, and adds it to the in-memory cache. Threads exit when the queue is empty.
 
-While the cache is being populated, the web server also starts up and accepts requests. Aside from the special /grading/beacon case, the server always checks for the request resource in its cache first. If the content is there, the server returns the cached content; if not, it requests the resource from the origin server and returns that.
+While the cache is being populated, the web server also starts up and accepts requests. Aside from the special /grading/beacon case, the server always checks for the request resource in its caches first. If the content is there, the server returns the cached content; if not, it requests the resource from the origin server and returns that.
 
-Still to do: perform active measurement of client connection using scamper python tool, add endpoint for DNS server to get data about this measurement.
+Still to do: perform active measurement of client connection using scamper python tool, add endpoint for DNS server to get data about this measurement, and add a health check endpoint so the server can let the runCDN script know when it is ready to accept requests.
 
 DNS server design(Tianyi )
 
