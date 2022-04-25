@@ -30,11 +30,21 @@ rsync -e "ssh -i $keyfile" ./dnsserver $username@p5-dns.5700.network:~/
 echo "Making HTTP server executable"
 cp ./httpserver.py ./httpserver
 chmod +x ./httpserver
-# send to replica node along with data for cache
-echo "Sending HTTP executable to replica a node"
-rsync -e "ssh -i $keyfile" ./httpserver $username@p5-http-a.5700.network:~/
-echo "Sending cache lists to replica a node"
-rsync -e "ssh -i $keyfile" ./memory_cache.csv $username@p5-http-a.5700.network:~/
-rsync -e "ssh -i $keyfile" ./disk_cache.csv $username@p5-http-a.5700.network:~/
-echo "Sending disk_cache.zip to replica a node, this will take several seconds"
-rsync -e "ssh -i $keyfile" ./disk_cache.zip $username@p5-http-a.5700.network:~/
+# send to all replica nodes
+deploy_web_server () {
+    echo "Sending HTTP executable to replica $1 node"
+    rsync -e "ssh -i $keyfile" ./httpserver $username@p5-http-$1.5700.network:~/
+    echo "Sending cache lists to replica $1 node"
+    rsync -e "ssh -i $keyfile" ./memory_cache.csv $username@p5-http-$1.5700.network:~/
+    rsync -e "ssh -i $keyfile" ./disk_cache.csv $username@p5-http-$1.5700.network:~/
+}
+replicas=("a" "b" "c" "d" "e" "f" "g")
+for i in "${replicas[@]}"; do
+    deploy_web_server "$i" &
+done
+wait
+echo "Done!"
+
+# TODO: need to download this from a public URL, can't do this wget unless repo is public
+# echo "Downloading disk_cache.zip from Github to replica a node, this will take several seconds"
+# ssh -i $keyfile $username@p5-http-a.5700.network "wget https://github.com/coffinated/5700-project5/blob/main/disk_cache.zip"
