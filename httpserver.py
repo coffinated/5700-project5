@@ -7,7 +7,7 @@ This file runs the HTTP service on the replica nodes for project 5.
 import argparse
 import gzip
 import shutil
-from os import remove
+from os import remove, system
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPException, RemoteDisconnected
 import queue
@@ -17,10 +17,10 @@ from threading import Thread
 from time import strftime, time
 from urllib.parse import quote
 from urllib.request import urlopen
+import sc_attach
 
 SERVER: ThreadingHTTPServer
 ORIGIN: HTTPConnection
-# TODO: make sure this is acceptable
 ADDRESS = urlopen('https://api.ipify.org/').read().decode('utf8')
 MEM_CACHE = {}
 DISK_CACHE = {}
@@ -33,6 +33,7 @@ Helper function for handling interrupts and closing gracefully
 def close_server(signum, frame):
     SERVER.server_close()
     ORIGIN.close()
+    PINGER.close()
     print(f"Stopped server at {strftime('%c')}")
     exit(0)
 
@@ -62,6 +63,22 @@ def fetch_from_origin(resource, conn: HTTPConnection):
     # TODO: set headers explicitly instead of forwarding the origin's headers??
     headers = res.getheaders()
     return (status, content, headers)
+
+
+'''
+Active measurement of client RTT
+'''
+class Pinger:
+    def __init__(self):
+        self.sc_conn = sc_attach.Scamper('out.warts')
+        self.sc_conn.connect()
+        self.sc_conn.attach()
+
+    def measure(self, address):
+        self.sc_conn.execute(f"ping -i {address}")
+
+    def close(self):
+        del self.sc_conn
 
 
 '''
@@ -119,6 +136,8 @@ class handler(BaseHTTPRequestHandler):
                     self.send_header(each[0], each[1])
                 self.end_headers()
                 self.wfile.write(content)
+
+        PINGER.measure(self.address_string())
 
 
 '''
@@ -225,6 +244,8 @@ and shuts down its connection to the origin server.
 def main():
     global SERVER
     global ORIGIN
+    global PINGER
+    PINGER = Pinger()
 
     # accept and parse command line arguments
     parser = argparse.ArgumentParser(description='Start HTTP replica server using specified local'
