@@ -1,4 +1,3 @@
-#! /usr/bin/env python3
 
 import sys
 import socketserver
@@ -25,7 +24,7 @@ class DnsPacket:
         packet += self.answer.create_answer(ip)
         return packet
 
-    def create_query(self,name);
+    def create_query(self,name):
         self.account = 1
         self.flags = 0x8180
         packet = pack('!HHHHHH',self.id,self.flag,self.qcount,self.acount,self.nscount,self.ar)
@@ -79,7 +78,7 @@ class DnsQuery:
 
 
     def re_construct_dns_query_2(self, raw_data):
-        print raw_data
+        
         length = -1
         index = 0
         name = []
@@ -99,7 +98,6 @@ class DnsQuery:
         self.qtype = unpack("!H",raw_data[index:index+2])[0]
         self.qclass = unpack("!H", raw_data[index+2:index+4])[0]
         self.qname = '.'.join(name)
-        print self.qname
 
     def construct_dns_query(self, domain_name):
 
@@ -154,7 +152,6 @@ class DNS_Request_Handler(socketserver.BaseRequestHandler):
         dnspack = DnsPacket()
         dnspack.unpack_dns_packet(data)
         
-        if self.client_address[0] not in client_mapping:
             
             
 
