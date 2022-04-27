@@ -32,11 +32,17 @@ cp ./httpserver.py ./httpserver
 chmod +x ./httpserver
 # send to all replica nodes
 deploy_web_server () {
-    echo "Sending HTTP executable to replica $1 node"
+    echo "Sending HTTP executable to replica $1"
     rsync -e "ssh -i $keyfile" ./httpserver $username@p5-http-$1.5700.network:~/
-    echo "Sending cache lists to replica $1 node"
+    rsync -e "ssh -i $keyfile" ./sc_attach.py $username@p5-http-$1.5700.network:~/
+    echo "Sending cache lists to replica $1"
     rsync -e "ssh -i $keyfile" ./memory_cache.csv $username@p5-http-$1.5700.network:~/
     rsync -e "ssh -i $keyfile" ./disk_cache.csv $username@p5-http-$1.5700.network:~/
+    echo "Downloading disk_cache.zip from Github at replica $1"
+    ssh -i $keyfile $username@p5-http-$1.5700.network "[ -e ~/disk_cache.zip ] || wget -q https://raw.githubusercontent.com/coffinated/5700-project5/main/disk_cache.zip"
+    # commented out as this is a work in progress
+    # echo "Starting scamper at replica $1"
+    # ssh -i $keyfile $username@p5-http-$1.5700.network "scamper -D -P 31337"
 }
 replicas=("a" "b" "c" "d" "e" "f" "g")
 for i in "${replicas[@]}"; do
@@ -44,7 +50,3 @@ for i in "${replicas[@]}"; do
 done
 wait
 echo "Done!"
-
-# TODO: need to download this from a public URL, can't do this wget unless repo is public
-# echo "Downloading disk_cache.zip from Github to replica a node, this will take several seconds"
-# ssh -i $keyfile $username@p5-http-a.5700.network "wget https://github.com/coffinated/5700-project5/blob/main/disk_cache.zip"
