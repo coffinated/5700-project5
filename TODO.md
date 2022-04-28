@@ -19,15 +19,15 @@ Components
       - [x] can also store cache on disk (another 20MB), ship with deploy script
     - [x] call server using `./httpserver -p <port> -o <origin>`
     - [ ] add health check endpoint for startup
-    - [ ] measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper)
-      - [ ] share that info with DNS server over HTTP
+    - [x] measure latency with client (using scamper? https://www.caida.org/catalog/software/scamper/ -- python tools: https://github.com/cmand/scamper)
+      - [x] share that info with DNS server over HTTP
  - scripts (use SSH key-based authentication)
     - [x] deployCDN
-      - [ ] edit to include all replicas
+      - [x] edit to include all replicas
       - [x] deploy cache files as well
       - [ ] and geoIP db?
     - [x] runCDN
-      - [ ] edit to include all replicas
+      - [x] edit to include all replicas
       - [ ] add health check for web servers
     - [x] stopCDN
-      - [ ] edit to include all replicas
+      - [x] edit to include all replicas
