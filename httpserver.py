@@ -4,19 +4,19 @@
 This file runs the HTTP service on the replica nodes for project 5.
 '''
 
+from signal import signal, SIGTERM, SIGINT
 import argparse
+from threading import Thread
 import gzip
 import shutil
+from csv import reader
+import queue
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPException, RemoteDisconnected
-import queue
-from csv import reader
-from signal import signal, SIGTERM, SIGINT
-from threading import Thread
 from time import strftime, time
 from urllib.parse import quote
 from urllib.request import urlopen
-import sc_attach
+import subprocess
 
 SERVER: ThreadingHTTPServer
 ORIGIN: HTTPConnection
@@ -32,7 +32,6 @@ Helper function for handling interrupts and closing gracefully
 def close_server(signum, frame):
     SERVER.server_close()
     ORIGIN.close()
-    PINGER.close()
     print(f"Stopped server at {strftime('%c')}")
     exit(0)
 
@@ -65,22 +64,6 @@ def fetch_from_origin(resource, conn: HTTPConnection):
 
 
 '''
-Active measurement of client RTT
-'''
-class Pinger:
-    def __init__(self):
-        self.sc_conn = sc_attach.Scamper('out.warts')
-        self.sc_conn.connect()
-        self.sc_conn.attach()
-
-    def measure(self, address):
-        self.sc_conn.execute(f"ping -i {address}")
-
-    def close(self):
-        del self.sc_conn
-
-
-'''
 This class defines our handling of GET requests at the web server. Aside from the /grading/beacon
 special case, when we receive a request, we look for it in our cache. If it's there, we return the
 cached content; if not, we request the resource from the origin server and return that content.
@@ -92,9 +75,52 @@ class handler(BaseHTTPRequestHandler):
         global MEM_CACHE
         global DISK_CACHE
 
+        # special grading endpoint
         if self.path == '/grading/beacon':
             self.send_response(204)
             self.end_headers()
+
+        # special endpoint for DNS server to ask for client-server latency
+        elif self.path.startswith('/latency'):
+            addr = ''
+            rtt = 0
+            # check for correctly formatted request, send back 400 if not
+            if len(self.path.split('?')) > 1:
+                q_string = self.path.split('?')[1]
+                if q_string.split('=')[0] == 'addr':
+                    addr = q_string.split('=')[1]
+                else:
+                    self.send_error(400, 'Requests to /latency should include \"?addr=[IPv4 address]\"')
+            else:
+                self.send_error(400, 'Requests to /latency should include \"?addr=[IPv4 address]\"')
+            
+            # get latency to provided addr from this machine using scamper:
+            # by default, scamper pings 4 times, 1 second apart
+            sc_proc = subprocess.Popen(['scamper', '-c', 'ping', '-i', addr],
+                                        stdout=subprocess.PIPE, 
+                                        stderr=subprocess.PIPE)
+            try:
+                out, err = sc_proc.communicate(timeout=6)
+            except subprocess.TimeoutExpired:
+                sc_proc.kill()
+                out, err = sc_proc.communicate()
+
+            if sc_proc.returncode == 0:
+                out = out.decode().split('\n')
+                if len(out) < 5:
+                    self.send_error(500, f'Could not get latency for {addr}', f'Output from scamper: {out}')
+                else:
+                    # expected scamper output final line should look like this:
+                    #    round-trip min/avg/max/stddev = 21.302/23.791/28.526/2.912 ms
+                    # so we get avg by taking 4th index from '/'-delimited list
+                    rtt = out[7].split('/')[4]
+                    self.send_response(200)
+                    content = bytes(rtt, 'ascii') + b'\n'
+                    self.send_header('Content-Length', len(content))
+                    self.end_headers()
+                    self.wfile.write(content)
+            else:
+                self.send_error(500, f'Could not get latency for {addr}', f'Stderr from scamper: {err}')
 
         else:
             # if the path is in the mem_cache map, we have at least started or tried to cache it
@@ -135,8 +161,6 @@ class handler(BaseHTTPRequestHandler):
                     self.send_header(each[0], each[1])
                 self.end_headers()
                 self.wfile.write(content)
-
-        PINGER.measure(self.address_string())
 
 
 '''
@@ -240,8 +264,6 @@ and shuts down its connection to the origin server.
 def main():
     global SERVER
     global ORIGIN
-    global PINGER
-    PINGER = Pinger()
 
     # accept and parse command line arguments
     parser = argparse.ArgumentParser(description='Start HTTP replica server using specified local'

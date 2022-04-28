@@ -34,14 +34,10 @@ chmod +x ./httpserver
 deploy_web_server () {
     echo "Sending server code and cache lists to replica $1"
     rsync -e "ssh -i $keyfile" ./httpserver $username@p5-http-$1.5700.network:~/
-    rsync -e "ssh -i $keyfile" ./sc_attach.py $username@p5-http-$1.5700.network:~/
     rsync -e "ssh -i $keyfile" ./memory_cache.csv $username@p5-http-$1.5700.network:~/
     rsync -e "ssh -i $keyfile" ./disk_cache.csv $username@p5-http-$1.5700.network:~/
     echo "Downloading disk cache from Github at replica $1"
     ssh -i $keyfile $username@p5-http-$1.5700.network "[ -e ~/disk_cache/ ] || wget -qO- https://raw.githubusercontent.com/coffinated/5700-project5/main/disk_cache.tar | tar x"
-    # commented out as this is a work in progress
-    # echo "Starting scamper at replica $1"
-    # ssh -i $keyfile $username@p5-http-$1.5700.network "scamper -D -P 31337"
 }
 replicas=("a" "b" "c" "d" "e" "f" "g")
 for i in "${replicas[@]}"; do
