@@ -7,7 +7,6 @@ This file runs the HTTP service on the replica nodes for project 5.
 import argparse
 import gzip
 import shutil
-from os import remove, system
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection, HTTPException, RemoteDisconnected
 import queue
@@ -206,9 +205,6 @@ report back on how long it took (TODO: can delete the latter before final submis
 '''
 def warm_cache():
     global DISK_CACHE
-    print('Unzipping disk cache', flush=True)
-    shutil.unpack_archive('./disk_cache.zip')
-    remove('./disk_cache.zip')
     print('Reading disk cache list', flush=True)
     with open('disk_cache.csv', newline='') as disk_pages:
         tier2_reader = reader(disk_pages)
