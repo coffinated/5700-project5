@@ -1,3 +1,5 @@
+import threading
+import traceback
 
 import sys
 import socketserver
@@ -6,7 +8,7 @@ import socket
 import struct
 import argparse
 import utility
-import dnslib
+from dnslib import *
 class DnsPacket:
     def __init__(self):
         self.id = random.randint(0,65535)
@@ -170,14 +172,14 @@ class DNS_Request_Handler(socketserver.BaseRequestHandler):
     def handle(self):
 
         global port
-        data = self.request[0]
+        data = self.request[0].strip()
         socket = self.request[1]
         dnspack = DnsPacket()
         dnspack.unpack_dns_packet(data)
         
         if(dnspack.query.qtype ==1):
             if self.client_address[0] in client_mappings:
-                data = dnspack.create_dns_answer(dnspack.query.qname, client_mappings[self.client_address[0])
+                data = dnspack.create_dns_answer(dnspack.query.qname, client_mappings[self.client_address[0]])
                 socket.sendto(data,self.client_address)
 
             else:
@@ -186,7 +188,7 @@ class DNS_Request_Handler(socketserver.BaseRequestHandler):
                 best_replica = find_cloest_server(loc_float)
                 client_mapping[self.client_address[0]] = best_replica
                 data = dnspack.create_dns_answer(dnspack.query.qname,best_replica)
-                socket.sendto(data,self.client(address)
+                socket.sendto(data,self.client.address)
 
 
 
