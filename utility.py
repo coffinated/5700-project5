@@ -4,7 +4,8 @@ import math
 import urllib
 import urllib.request
 import json
-def get_location_from_ip(ip_addr):
+import re
+def get_location(ip_addr):
     url = 'http://ipinfo.io/'+ip_addr+'?token=5548847374ffad'
     response = urllib.request.urlopen(url).read()
     parsed_resp = json.loads(response)
@@ -40,11 +41,14 @@ def find_cloest_server(client_location):
     cloest_server = min(distance, key = distance.get)
     print(cloest_server)
     return cloest_server
-    
-    
-def main():
-    a = get_location_from_ip('13.54.30.86')
-    b = get_location_from_ip('50.116.41.109')
-    calculate_distance(a,b)
-    find_cloest_server(a)
-main()
+
+priv_lo = re.compile("^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+priv_24 = re.compile("^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+priv_20 = re.compile("^192\.168\.\d{1,3}.\d{1,3}$")
+priv_16 = re.compile("^172.(1[6-9]|2[0-9]|3[0-1]).[0-9]{1,3}.[0-9]{1,3}$")
+
+def is_private(client_addr):
+    if lo.match(client_addr) or p_24.match(client_addr) or p_20.match(client_addr) or p_16.match(client_addr):
+        return True
+    return False
+
