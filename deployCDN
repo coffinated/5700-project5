@@ -27,6 +27,10 @@ chmod +x ./dnsserver
 echo "Sending DNS executable to DNS node"
 rsync -e "ssh -i $keyfile" ./dnsserver $username@p5-dns.5700.network:~/
 rsync -e "ssh -i $keyfile" ./utility.py $username@p5-dns.5700.network:~/
+ssh -i "$keyfile" $username@p5-dns.5700.network "[ -e ~/GeoLite2-City_20220426/GeoLite2-City.mmdb ] || {
+        echo "Downloading GeoLite database from Github at DNS node"
+        wget -qO- https://raw.githubusercontent.com/coffinated/5700-project5/main/GeoLite2-City.tar.gz | tar x --wildcards '*.mmdb'
+    }"
 
 # make executable file for HTTP server
 echo "Making HTTP server executable"

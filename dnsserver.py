@@ -12,6 +12,8 @@ from dnslib import *
 ##https://datatracker.ietf.org/doc/html/rfc1035
 
 
+LOCATOR = utility.LocationHelper()
+
 class DnsPacket:
     def __init__(self):
         self.id = random.randint(0,65535)
@@ -186,10 +188,8 @@ class DNS_Request_Handler(socketserver.BaseRequestHandler):
                 socket.sendto(data,self.client_address)
 
             else:
-                loc = utility.get_location(self.client_address[0])
-                loc_float = [float(loc[0]), float(loc[1])]
-                best_replica = find_cloest_server(loc_float)
-                client_mapping[self.client_address[0]] = best_replica
+                best_replica = LOCATOR.find_closest_server(loc_float)
+                client_mappings[self.client_address[0]] = best_replica
                 data = dnspack.create_dns_answer(dnspack.query.qname,best_replica)
                 socket.sendto(data,self.client.address)
 
@@ -228,8 +228,8 @@ def main():
 
     server = DNS_Server(hostname, port,('',port))
     
-    server.serve_forever()
-    thread = threading.Thread(target = server.server.forever)
+    # server.serve_forever()
+    thread = threading.Thread(target = server.serve_forever)
     thread.daemon = True
     thread.start()
     
