@@ -26,6 +26,7 @@ chmod +x ./dnsserver
 # send to DNS server node
 echo "Sending DNS executable to DNS node"
 rsync -e "ssh -i $keyfile" ./dnsserver $username@p5-dns.5700.network:~/
+rsync -e "ssh -i $keyfile" ./utility.py $username@p5-dns.5700.network:~/
 
 # make executable file for HTTP server
 echo "Making HTTP server executable"
