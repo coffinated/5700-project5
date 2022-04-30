@@ -6,11 +6,10 @@ The Python standard library's http.server and http.client modules are used for s
 
 We have a two-tiered cache: the most popular contents are stored in memory for fastest access, then the next most popular are stored on disk. The on-disk cache is retrieved from our public Github repo by each replica during the deploy phase, and to learn which pages it has on disk, it reads disk_cache.csv at startup. (This file is a list of all the resources the disk_cache.zip file contains. We determined this list and the in-memory one using trial and error to find the most page contents we could store compressed while staying within our 20 MB disk and memory limits.) Next, memory_cache.csv is read into a queue with blocking functionality. We start working through this queue using 3 threads. Each thread takes an item off the queue, requests the content for that resource from the origin, and adds it to the in-memory cache. Threads exit when the queue is empty.
 
-While the cache is being populated, the web server also starts up and accepts requests. Aside from the special-case endpoints (/grading/beacon and /latency, more on that in a moment), the server always checks for the request resource in its caches first. If the content is there, the server returns the cached content; if not, it requests the resource from the origin server and returns that.
+While the cache is first being populated, the web server returns status code 503 on its health check endpoint, /ready. When it has at least 10 items in its in-memory cache, it returns 204. This way the run script knows the server is ready to accept requests. Aside from the special-case endpoints (/ready, /grading/beacon and /latency, more on that in a moment), the server always checks for a requested resource in its caches first. If the content is there, the server returns the cached content; if not, it requests the resource from the origin server and returns that.
 
 The web servers include a special /latency endpoint to be used by the DNS server to ask them to test and return their latency to a given IP address. The web server uses Python's subprocess to run `scamper -c ping -i <addr>`, which will send 4 pings, 1 second apart, to the given IP address. The server returns the average latency recorded from the 4 pings.
 
-Still to do: add a health check endpoint so the server can let the runCDN script know when it is ready to accept requests.
 
 DNS server design(Tianyi )
 
