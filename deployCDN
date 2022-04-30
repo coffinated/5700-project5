@@ -1,4 +1,5 @@
 #! /usr/bin/env bash
+set -e
 
 while getopts "p:o:n:u:i:" flag; do
     case $flag in
@@ -36,8 +37,10 @@ deploy_web_server () {
     rsync -e "ssh -i $keyfile" ./httpserver $username@p5-http-$1.5700.network:~/
     rsync -e "ssh -i $keyfile" ./memory_cache.csv $username@p5-http-$1.5700.network:~/
     rsync -e "ssh -i $keyfile" ./disk_cache.csv $username@p5-http-$1.5700.network:~/
-    echo "Downloading disk cache from Github at replica $1"
-    ssh -i $keyfile $username@p5-http-$1.5700.network "[ -e ~/disk_cache/ ] || wget -qO- https://raw.githubusercontent.com/coffinated/5700-project5/main/disk_cache.tar | tar x"
+    ssh -i "$keyfile" $username@p5-http-$1.5700.network "[ -e ~/disk_cache/ ] || {
+        echo "Downloading disk cache from Github at replica $1"
+        wget -qO- https://raw.githubusercontent.com/coffinated/5700-project5/main/disk_cache.tar | tar x
+    }"
 }
 replicas=("a" "b" "c" "d" "e" "f" "g")
 for i in "${replicas[@]}"; do

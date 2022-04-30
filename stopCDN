@@ -19,10 +19,10 @@ while getopts "p:o:n:u:i:" flag; do
 done
 
 echo "Stopping DNS server"
-ssh -i $keyfile $username@p5-dns.5700.network "pkill -u $username python"
+ssh -i "$keyfile" "$username@p5-dns.5700.network" "pkill -u $username python"
 stop_web_server () {
     echo "Stopping HTTP server replica $1"
-    ssh -i $keyfile $username@p5-http-$1.5700.network "pkill -u $username python"
+    ssh -i "$keyfile" "$username@p5-http-$1.5700.network" "pkill -u $username python"
 }
 replicas=("a" "b" "c" "d" "e" "f" "g")
 for i in "${replicas[@]}"; do

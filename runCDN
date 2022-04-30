@@ -1,4 +1,5 @@
 #! /usr/bin/env bash
+set -e
 
 while getopts "p:o:n:u:i:" flag; do
     case $flag in
@@ -19,10 +20,16 @@ while getopts "p:o:n:u:i:" flag; do
 done
 
 echo "Starting DNS server"
-ssh -i $keyfile $username@p5-dns.5700.network "nohup ./dnsserver -p $port -n $name > dnsserver_log.out 2>&1 &"
+ssh -i "$keyfile" $username@p5-dns.5700.network "nohup ./dnsserver -p \"$port\" -n \"$name\" > dnsserver_log.out 2>&1 &"
 run_web_server () {
     echo "Starting HTTP server replica $1"
-    ssh -i $keyfile $username@p5-http-$1.5700.network "nohup ./httpserver -p $port -o $origin > httpserver_log.out 2>&1 &"
+    ssh -i "$keyfile" $username@p5-http-$1.5700.network "nohup ./httpserver -p \"$port\" -o \"$origin\" > httpserver_log.out 2>&1 &"
+    local status="0"
+    while [ "$status" != "204" ]; do
+        status=$(curl -s -o /dev/null -w "%{http_code}" "http://p5-http-$1.5700.network:$port/ready")
+        sleep 1
+    done
+    echo "Web server $1 ready"
 }
 replicas=("a" "b" "c" "d" "e" "f" "g")
 for i in "${replicas[@]}"; do

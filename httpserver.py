@@ -122,6 +122,15 @@ class handler(BaseHTTPRequestHandler):
             else:
                 self.send_error(500, f'Could not get latency for {addr}', f'Stderr from scamper: {err}')
 
+        # special health check endpoint to let run script know server is ready for requests
+        elif self.path == '/ready':
+            # start accepting requests once we've cached 10 items
+            if len(MEM_CACHE) >= 10:
+                self.send_response(204)
+                self.end_headers()
+            else:
+                self.send_error(503)
+
         else:
             # if the path is in the mem_cache map, we have at least started or tried to cache it
             if self.path in MEM_CACHE:
@@ -198,6 +207,7 @@ def content_fetcher(cq: queue.Queue, origin):
         if TOT_CACHED + len(content) + len(resource) <= 19900000:
             MEM_CACHE[resource] = content
             TOT_CACHED += len(content) + len(resource)
+        # queue should fit entirely, we shouldn't ever reach this, but just in case
         else:
             cq.queue.clear()
 
