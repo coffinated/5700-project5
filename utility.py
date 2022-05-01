@@ -2,7 +2,9 @@ import socket
 import math
 import re
 import maxminddb
-
+import urllib
+import urllib.request
+import json
 class LocationHelper():
     def __init__(self):
         self.reader = maxminddb.open_database('./GeoLite2-City_20220426/GeoLite2-City.mmdb')
@@ -15,12 +17,21 @@ class LocationHelper():
         }
 
 
+    def get_location1(self, ip_addr):
+        #answer = self.reader.get(ip_addr)
+        url = 'http://ipinfo.io/'+ip_addr+'?token=5548847374ffad'
+        response = urllib.request.urlopen(url).read()
+        parsed_resp = json.loads(response)
+        location = parsed_resp['loc'].split(',')
+
+        return location
+
     def get_location(self, ip_addr):
         answer = self.reader.get(ip_addr)
         location = (answer['latitude'], answer['longitude'])
-        return location
-
-
+        return location 
+        
+      
     def calculate_distance(self, location1, location2):
         lat1,lon1 = location1
         lat2,lon2 = location2
@@ -52,7 +63,7 @@ class LocationHelper():
         return closest_server
 
 
-    def is_private(client_addr):
+    def is_private(self,client_addr):
         priv_lo = re.compile("^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
         priv_24 = re.compile("^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
         priv_20 = re.compile("^192\.168\.\d{1,3}.\d{1,3}$")
@@ -61,3 +72,8 @@ class LocationHelper():
             return True
         return False
 
+
+
+
+	
+	
