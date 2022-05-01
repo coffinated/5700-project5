@@ -7,7 +7,7 @@ import urllib.request
 import json
 class LocationHelper():
     def __init__(self):
-        self.reader = maxminddb.open_database('./GeoLite2-City_20220426/GeoLite2-City.mmdb')
+        #self.reader = maxminddb.open_database('./GeoLite2-City_20220426/GeoLite2-City.mmdb')
         letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
         self.replicas = [
             socket.gethostbyname(f'p5-http-{l}.5700.network') for l in letters

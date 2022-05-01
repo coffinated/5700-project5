@@ -35,7 +35,7 @@ class DnsPacket:
 
     def create_query(self,name):
         self.account = 1
-        self.flags = 0x8180
+        self.flag = 0x8180
         packet = struct.pack('!HHHHHH',self.id,self.flag,self.qcount,self.acount,self.nscount,self.arcount)
         packet += self.query.data
         return packet
@@ -43,7 +43,7 @@ class DnsPacket:
     
     def unpack_dns_packet(self,data):
         [self.id,
-        self.flags,
+        self.flag,
         self.qcount,
         self.account,
         self.nscount,
@@ -51,7 +51,17 @@ class DnsPacket:
         self.query = DnsQuery()
         self.query.unpack_dns_query(data[12:])
         self.answer = None
-
+        
+    def print_DNS_packet(self):
+        print("DNS_Packet : ")
+        print("id : ", self.id)
+        print("flags : ", self.flag)
+        print("qcount : ", self.qcount)
+        print("account : ", self.account)
+        print("nscount : ", self.nscount)
+        print("arcount : ", self.arcount)
+        print("query : ")
+        self.query.print_DNS_query()
 class DnsQuery:
     
     def __init__(self):
@@ -60,30 +70,45 @@ class DnsQuery:
         self.qclass = 0
         self.data = ''
 
-    def unpack_dns_query(self, raw_data):
-        self.data = raw_data
-        [self.qtype,
-        self.qclass] = struct.unpack('>HH', raw_data[-4:])
-        qname = raw_data[:-4]
- 
-        length = 0
+    def unpack_dns_query(self, input_data):
+
+        hostname = []
+        size = 0
         index = 0
-        name = []
+        
+        
+        self.data = input_data
+        [self.qtype,
+        self.qclass] = struct.unpack('>HH', input_data[-4:])
+
+        qname = input_data[:-4]
+ 
         while True:
   
             size = qname[index]
                 
+            if size > 50:
+                size = 9
+                name.append(qname[index:index+size])
+                index += size
+                continue
+            # print "length : ", length
             if size == 0:
                 break
 
 
             index += 1
-            name.append(qname[index:index+length])
-            index += length
-        self.qname = b'.'.join(name)
+            hostname.append(qname[index:index+size])
+            index += size
+        self.qname = b'.'.join(hostname)
 
 
 
+    def print_DNS_query(self):
+        print("DNS_query : ")
+        print("qtype : ", self.qtype)
+        print("qclass : ", self.qclass)
+        print("qname : ", self.qname)
 
 
 
@@ -107,6 +132,15 @@ class DnsAnswer():
                                   self.ttl, self.len, socket.inet_aton(self.data))
 
         return DNS_answer
+        
+    def print_DNS_answer(self):
+        print("DNS_answer : ")
+        print("aname : ", self.aname)
+        print("atype : ", self.atype)
+        print("aclass : ", self.aclass)
+        print("ttl : ", self.ttl)
+        print("data : ", self.data)
+        print("length : ", self.len)
 
     
 client_mappings = {}
@@ -123,12 +157,14 @@ class DNS_Request_Handler(socketserver.BaseRequestHandler):
         socket = self.request[1]
         dnspack = DnsPacket()
         dnspack.unpack_dns_packet(data)
-        
+        dnspack.print_DNS_packet()
         if LOCATOR.is_private(self.client_address[0]):
             
             if self.client_address[0] not in client_mappings:
                 client_mappings[self.client_address[0]] = '50.116.41.109'
             data = dnspack.create_dns_answer(dnspack.query.qname,'50.116.41.109')
+            print('------add answer')
+            print(data)
             socket.sendto(data,self.client_address)
         else:
             if self.client_address[0] in client_mappings:
