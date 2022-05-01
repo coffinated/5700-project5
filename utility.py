@@ -6,9 +6,12 @@ import urllib.request
 import json
 import re
 def get_location(ip_addr):
+
     url = 'http://ipinfo.io/'+ip_addr+'?token=5548847374ffad'
     response = urllib.request.urlopen(url).read()
+    print(response)
     parsed_resp = json.loads(response)
+    print(parsed_resp)
     location = parsed_resp['loc'].split(',')
 
     return location
@@ -48,7 +51,11 @@ priv_20 = re.compile("^192\.168\.\d{1,3}.\d{1,3}$")
 priv_16 = re.compile("^172.(1[6-9]|2[0-9]|3[0-1]).[0-9]{1,3}.[0-9]{1,3}$")
 
 def is_private(client_addr):
-    if lo.match(client_addr) or p_24.match(client_addr) or p_20.match(client_addr) or p_16.match(client_addr):
+    if priv_lo.match(client_addr) or priv_24.match(client_addr) or priv_20.match(client_addr) or priv_16.match(client_addr):
         return True
     return False
 
+
+
+	
+	
