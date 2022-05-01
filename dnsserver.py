@@ -37,7 +37,7 @@ class DnsPacket:
         self.account = 1
         self.flag = 0x8180
         packet = struct.pack('!HHHHHH',self.id,self.flag,self.qcount,self.acount,self.nscount,self.arcount)
-        packet += self.query.data
+        packet += self.query.assemble_question()
         return packet
 
     
@@ -80,7 +80,6 @@ class DnsQuery:
         self.data = input_data
         [self.qtype,
         self.qclass] = struct.unpack('>HH', input_data[-4:])
-
         qname = input_data[:-4]
  
         while True:
@@ -89,7 +88,7 @@ class DnsQuery:
                 
             if size > 50:
                 size = 9
-                name.append(qname[index:index+size])
+                hostname.append(qname[index:index+size])
                 index += size
                 continue
             # print "length : ", length
@@ -101,9 +100,17 @@ class DnsQuery:
             hostname.append(qname[index:index+size])
             index += size
         self.qname = b'.'.join(hostname)
+        
+    def assemble_question(self):
+        domainname = self.qname.split(b'.')
+        qnamelist = []
+        for name in domainname:
 
+            qnamelist.append(chr(len(name)).encode()+name)
+        qname = b''.join(qnamelist) +b'\x00'
 
-
+        return qname+ struct.pack('>HH',self.qtype,self.qclass)
+        
     def print_DNS_query(self):
         print("DNS_query : ")
         print("qtype : ", self.qtype)
@@ -130,7 +137,7 @@ class DnsAnswer():
         self.len = 4
         DNS_answer = struct.pack('>HHHLH4s', self.aname, self.atype, self.aclass,
                                   self.ttl, self.len, socket.inet_aton(self.data))
-
+        print(type(DNS_answer))
         return DNS_answer
         
     def print_DNS_answer(self):
