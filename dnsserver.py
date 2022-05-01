@@ -136,10 +136,10 @@ class DNS_Request_Handler(socketserver.BaseRequestHandler):
                 socket.sendto(data,self.client_address)
 
             else:
-                best_replica = LOCATOR.find_closest_server(loc_float)
+                best_replica = LOCATOR.find_closest_server(self.client_address[0])
                 client_mappings[self.client_address[0]] = best_replica
                 data = dnspack.create_dns_answer(dnspack.query.qname,best_replica)
-                socket.sendto(data,self.client.address)
+                socket.sendto(data,self.client_address)
 
 
 

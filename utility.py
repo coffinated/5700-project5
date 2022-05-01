@@ -28,7 +28,8 @@ class LocationHelper():
 
     def get_location(self, ip_addr):
         answer = self.reader.get(ip_addr)
-        location = (answer['latitude'], answer['longitude'])
+        # print(answer, flush=True)
+        location = (answer['location']['latitude'], answer['location']['longitude'])
         return location 
         
       
