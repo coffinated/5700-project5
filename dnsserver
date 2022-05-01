@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 import threading
 import traceback
 
@@ -8,9 +10,11 @@ import socket
 import struct
 import argparse
 import utility
-from dnslib import *
+
 ##https://datatracker.ietf.org/doc/html/rfc1035
 
+
+LOCATOR = utility.LocationHelper()
 
 class DnsPacket:
     def __init__(self):
@@ -109,66 +113,6 @@ client_mappings = {}
 
 
 
-class DomainName(str):
-    def __getattr__(self, item):
-        return DomainName(item + '.' + self)
-
-##dnslib usage https://gist.github.com/pklaus/b5a7876d4d2cf7271873
-D = DomainName('example.com.')
-IP = '127.0.0.1'
-TTL = 60 * 5
-
-soa_record = SOA(
-    mname=D.ns1,  # primary name server
-    rname=D.andrei,  # email of the domain administrator
-    times=(
-        201307231,  # serial number
-        60 * 60 * 1,  # refresh
-        60 * 60 * 3,  # retry
-        60 * 60 * 24,  # expire
-        60 * 60 * 1,  # minimum
-    )
-)
-ns_records = [NS(D.ns1), NS(D.ns2)]
-records = {
-    D: [A(IP), AAAA((0,) * 16), MX(D.mail), soa_record] + ns_records,
-    D.ns1: [A(IP)],  # MX and NS records must never point to a CNAME alias (RFC 2181 section 10.3)
-    D.ns2: [A(IP)],
-    D.mail: [A(IP)],
-    D.andrei: [CNAME(D)],
-}
-
-## not sure if needed; dnslib implementation
-def dns_response(data):
-    request = DNSRecord.parse(data)
-
-    print(request)
-
-    reply = DNSRecord(DNSHeader(id=request.header.id, qr=1, aa=1, ra=1), q=request.q)
-
-    qname = request.q.qname
-    qn = str(qname)
-    qtype = request.q.qtype
-    qt = QTYPE[qtype]
-
-    if qn == D or qn.endswith('.' + D):
-
-        for name, rrs in records.items():
-            if name == qn:
-                for rdata in rrs:
-                    rqt = rdata.__class__.__name__
-                    if qt in ['*', rqt]:
-                        reply.add_answer(RR(rname=qname, rtype=getattr(QTYPE, rqt), rclass=1, ttl=TTL, rdata=rdata))
-
-        for rdata in ns_records:
-            reply.add_ar(RR(rname=D, rtype=QTYPE.NS, rclass=1, ttl=TTL, rdata=rdata))
-
-        reply.add_auth(RR(rname=D, rtype=QTYPE.SOA, rclass=1, ttl=TTL, rdata=soa_record))
-
-    print("---- Reply:\n", reply)
-
-    return reply.pack()
-
 
 
 class DNS_Request_Handler(socketserver.BaseRequestHandler):
@@ -180,16 +124,20 @@ class DNS_Request_Handler(socketserver.BaseRequestHandler):
         dnspack = DnsPacket()
         dnspack.unpack_dns_packet(data)
         
-        if(dnspack.query.qtype ==1):
+        if LOCATOR.is_private(self.clent_address[0]):
+            
+            if self.client_address[0] not in client_mappings:
+                client_mappings[self.client_address[0]] = '50.116.41.109'
+            data = dnspack.create_dns_answer(dnspack.query.qname,'50.116.41.109')
+            socket.sendto(data,self.client.address)
+        else:
             if self.client_address[0] in client_mappings:
                 data = dnspack.create_dns_answer(dnspack.query.qname, client_mappings[self.client_address[0]])
                 socket.sendto(data,self.client_address)
 
             else:
-                loc = utility.get_location(self.client_address[0])
-                loc_float = [float(loc[0]), float(loc[1])]
-                best_replica = find_cloest_server(loc_float)
-                client_mapping[self.client_address[0]] = best_replica
+                best_replica = LOCATOR.find_closest_server(loc_float)
+                client_mappings[self.client_address[0]] = best_replica
                 data = dnspack.create_dns_answer(dnspack.query.qname,best_replica)
                 socket.sendto(data,self.client.address)
 
@@ -228,8 +176,8 @@ def main():
 
     server = DNS_Server(hostname, port,('',port))
     
-    server.serve_forever()
-    thread = threading.Thread(target = server.server.forever)
+    # server.serve_forever()
+    thread = threading.Thread(target = server.serve_forever)
     thread.daemon = True
     thread.start()
     

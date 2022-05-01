@@ -2,7 +2,7 @@
 
 import threading
 import traceback
-
+import random
 import sys
 import socketserver
 import sys
@@ -36,7 +36,7 @@ class DnsPacket:
     def create_query(self,name):
         self.account = 1
         self.flags = 0x8180
-        packet = pack('!HHHHHH',self.id,self.flag,self.qcount,self.acount,self.nscount,self.ar)
+        packet = struct.pack('!HHHHHH',self.id,self.flag,self.qcount,self.acount,self.nscount,self.arcount)
         packet += self.query.data
         return packet
 
@@ -47,8 +47,8 @@ class DnsPacket:
         self.qcount,
         self.account,
         self.nscount,
-        self.arcount] = unpack("!HHHHHH", data[:12])
-        self.query = DNSquery()
+        self.arcount] = struct.unpack("!HHHHHH", data[:12])
+        self.query = DnsQuery()
         self.query.unpack_dns_query(data[12:])
         self.answer = None
 
@@ -63,7 +63,7 @@ class DnsQuery:
     def unpack_dns_query(self, raw_data):
         self.data = raw_data
         [self.qtype,
-        self.qclass] = unpack('>HH', raw_data[-4:])
+        self.qclass] = struct.unpack('>HH', raw_data[-4:])
         qname = raw_data[:-4]
  
         length = 0
@@ -71,7 +71,7 @@ class DnsQuery:
         name = []
         while True:
   
-            size = ord(qname[index])
+            size = qname[index]
                 
             if size == 0:
                 break
@@ -80,7 +80,7 @@ class DnsQuery:
             index += 1
             name.append(qname[index:index+length])
             index += length
-        self.qname = '.'.join(name)
+        self.qname = b'.'.join(name)
 
 
 
@@ -103,7 +103,7 @@ class DnsAnswer():
         self.ttl = 40
         self.data = ip
         self.len = 4
-        DNS_answer = pack('>HHHLH4s', self.aname, self.atype, self.aclass,
+        DNS_answer = struct.pack('>HHHLH4s', self.aname, self.atype, self.aclass,
                                   self.ttl, self.len, socket.inet_aton(self.data))
 
         return DNS_answer
@@ -124,12 +124,12 @@ class DNS_Request_Handler(socketserver.BaseRequestHandler):
         dnspack = DnsPacket()
         dnspack.unpack_dns_packet(data)
         
-        if LOCATOR.is_private(self.clent_address[0]):
+        if LOCATOR.is_private(self.client_address[0]):
             
             if self.client_address[0] not in client_mappings:
                 client_mappings[self.client_address[0]] = '50.116.41.109'
             data = dnspack.create_dns_answer(dnspack.query.qname,'50.116.41.109')
-            socket.sendto(data,self.client.address)
+            socket.sendto(data,self.client_address)
         else:
             if self.client_address[0] in client_mappings:
                 data = dnspack.create_dns_answer(dnspack.query.qname, client_mappings[self.client_address[0]])
@@ -151,11 +151,7 @@ class DNS_Server(socketserver.UDPServer):
         self.ip = self.get_ipaddr()
         socketserver.UDPServer.__init__(self, server_address, handler_class)
         ## i dont know if binding is needed here
-        try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.socket.bind((self.my_ip,self.port))
-        except:
-            sys.exit()
+
     
     def get_ipaddr(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -176,7 +172,7 @@ def main():
 
     server = DNS_Server(hostname, port,('',port))
     
-    # server.serve_forever()
+    server.serve_forever()
     thread = threading.Thread(target = server.serve_forever)
     thread.daemon = True
     thread.start()
